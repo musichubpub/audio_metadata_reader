@@ -5,10 +5,10 @@ import 'package:audio_metadata_reader/src/parser.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test("Parse APE file that does not contain a cover", () {
+  test("Parse APE file that contain a cover", () {
     final track = File('./test/ape/track.ape');
     final result = readMetadata(track, getImage: true);
-    print(result.toString());
+    // print(result.toString());
     expect(result.album, equals("Album"));
     expect(result.artist, equals("Artist"));
     expect(result.discNumber, equals(1));

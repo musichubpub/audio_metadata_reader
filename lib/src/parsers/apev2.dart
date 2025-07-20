@@ -10,6 +10,8 @@ class Apev2Parser extends TagParser {
   Apev2Parser({super.fetchImage = false});
   @override
   ParserTag parse(RandomAccessFile reader) {
+    reader.setPositionSync(0);
+
     final fileSize = reader.lengthSync();
     // final lastModified = reader.lastModifiedSync();
 
@@ -37,7 +39,8 @@ class Apev2Parser extends TagParser {
     metadata.duration = header['duration'];
     metadata.year = _parseYear(tag['year']);
     metadata.size = fileSize;
-    metadata.bitrate = header['bitrate'] != null ? header['bitrate'] * 1000 : null;
+    metadata.bitrate =
+        header['bitrate'] != null ? header['bitrate'] * 1000 : null;
     metadata.samplerate = header['sampleRate'];
     metadata.version = header['version'];
     metadata.totalDics = _parseInt(tag['disc']);
@@ -62,11 +65,11 @@ class Apev2Parser extends TagParser {
   static bool canUserParser(RandomAccessFile reader) {
     reader.setPositionSync(0);
     final bytes = reader.readSync(76);
-    final bd = ByteData.sublistView(bytes);
     final id = utf8.decode(bytes.sublist(0, 4));
     if (id != 'MAC ') return false;
-    final version = bd.getUint32(4, Endian.little);
-    if (version < 3980) return false;
+    final bd = ByteData.sublistView(bytes);
+    final version = bd.getUint16(4, Endian.little);
+    if (version < 3900) return false;
     return true;
   }
 
@@ -78,16 +81,20 @@ class Apev2Parser extends TagParser {
       throw FormatException('APEv2 header is too short.');
     }
 
-    final itemCount = ByteData.sublistView(bytes, offset + 12, offset + 16).getUint32(0, Endian.little);
+    final itemCount = ByteData.sublistView(bytes, offset + 12, offset + 16)
+        .getUint32(0, Endian.little);
     int pos = offset + 32;
 
     for (int i = 0; i < itemCount && pos + 8 <= bytes.length; i++) {
-      final valueSize = ByteData.sublistView(bytes, pos, pos + 4).getUint32(0, Endian.little);
+      final valueSize =
+          ByteData.sublistView(bytes, pos, pos + 4).getUint32(0, Endian.little);
       final keyEnd = bytes.indexOf(0x00, pos + 8);
       if (keyEnd == -1 || keyEnd >= bytes.length) break;
       if (bytes.sublist(pos + 8, keyEnd).length < 3) break;
 
-      final key = utf8.decode(bytes.sublist(pos + 8, keyEnd), allowMalformed: true).toLowerCase();
+      final key = utf8
+          .decode(bytes.sublist(pos + 8, keyEnd), allowMalformed: true)
+          .toLowerCase();
       final valueStart = keyEnd + 1;
       final valueEnd = valueStart + valueSize;
       if (valueEnd > bytes.length) break;
@@ -98,7 +105,8 @@ class Apev2Parser extends TagParser {
         map[key] = bytes.sublist(imageDataStart, valueEnd);
       } else {
         try {
-          map[key] = utf8.decode(bytes.sublist(valueStart, valueEnd), allowMalformed: true);
+          map[key] = utf8.decode(bytes.sublist(valueStart, valueEnd),
+              allowMalformed: true);
         } catch (e) {
           map[key] = '';
         }
@@ -112,7 +120,9 @@ class Apev2Parser extends TagParser {
   static int _findApeTagOffset(Uint8List bytes) {
     const signature = 'APETAGEX';
     for (int i = bytes.length - 160; i >= 0; i--) {
-      if (i + 8 <= bytes.length && utf8.decode(bytes.sublist(i, i + 8), allowMalformed: true) == signature) {
+      if (i + 8 <= bytes.length &&
+          utf8.decode(bytes.sublist(i, i + 8), allowMalformed: true) ==
+              signature) {
         return i;
       }
     }
@@ -121,26 +131,93 @@ class Apev2Parser extends TagParser {
 
   /// Parses the APE header
   static Map _parseApeHeader(Uint8List bytes, int fileSize) {
+    final version = ByteData.sublistView(bytes).getUint16(4, Endian.little);
+    return version <= 3970
+        ? _parseOldApeHeader(bytes, fileSize)
+        : _parseNewApeHeader(bytes, fileSize);
+  }
+
+  /// Parse old APE MAC header (version 3.97 or earlier)
+  static Map<String, dynamic> _parseOldApeHeader(
+      Uint8List bytes, int fileSize) {
     final bd = ByteData.sublistView(bytes);
-    final version = bd.getUint32(4, Endian.little);
+
+    final version = bd.getUint16(4, Endian.little);
+    final compressionLevel = bd.getUint16(6, Endian.little);
+    final channels = bd.getUint16(10, Endian.little);
+    final sampleRate = bd.getUint32(12, Endian.little);
+    final totalFrames = bd.getUint32(24, Endian.little);
+    final finalFrameBlocks = bd.getUint32(28, Endian.little);
+
+    final duration = _calculateApeDuration(
+      sampleRate,
+      totalFrames,
+      finalFrameBlocks,
+      finalFrameBlocks,
+    );
+
+    final bitrate = duration > 0 ? (fileSize * 8) / (duration * 1000) : 0;
+
+    return {
+      'sampleRate': sampleRate,
+      'channels': channels,
+      'compressionLevel': compressionLevel,
+      'version': '${version / 1000}',
+      'duration': _fromDoubleSeconds(duration),
+      'bitrate': bitrate.round(),
+    };
+  }
+
+  /// Parse the APE header
+  static Map<String, dynamic> _parseNewApeHeader(
+      Uint8List bytes, int fileSize) {
+    // Compression Level               : 2000
+    // Blocks Per Frame                : 73728
+    // Final Frame Blocks              : 18816
+    // Total Frames                    : 4
+    // Bits Per Sample                 : 24
+    // Channels                        : 1
+    // Sample Rate                     : 48000
+    final bd = ByteData.sublistView(bytes);
+    // final compressionLevel = bd.getUint16(52, Endian.little);
+    // final formatFlags = bd.getUint16(54, Endian.little);
     final blocksPerFrame = bd.getUint32(56, Endian.little);
+    final finalFrameBlocks = bd.getUint32(60, Endian.little);
     final totalFrames = bd.getUint32(64, Endian.little);
     final bitsPerSample = bd.getUint16(68, Endian.little);
     final channels = bd.getUint16(70, Endian.little);
     final sampleRate = bd.getUint32(72, Endian.little);
 
-    final totalSamples = totalFrames * blocksPerFrame;
-    final duration = totalSamples / sampleRate;
-    final bitrate = (fileSize * 8) ~/ (duration * 1000);
+    final duration = _calculateApeDuration(
+      sampleRate,
+      totalFrames,
+      blocksPerFrame,
+      finalFrameBlocks,
+    );
 
+    final bitrate = duration > 0 ? (fileSize * 8) / (duration * 1000) : 0;
     return {
       'sampleRate': sampleRate,
       'channels': channels,
       'bitsPerSample': bitsPerSample,
-      'bitrate': bitrate,
-      'version': '${version / 1000}',
+      'bitrate': bitrate.round(),
+      'version': '${bd.getUint32(4, Endian.little) / 1000}',
       'duration': _fromDoubleSeconds(duration),
     };
+  }
+
+  /// Calculate the duration of the APE file.
+  static double _calculateApeDuration(
+    int sampleRate,
+    int totalFrames,
+    int blocksPerFrame,
+    int finalFrameBlocks,
+  ) {
+    if (sampleRate <= 0 || totalFrames <= 0) return 0;
+
+    // duration : (totalFrames - 1) * blocksPerFrame + finalFrameBlocks
+    final totalSamples = (totalFrames - 1) * blocksPerFrame + finalFrameBlocks;
+    return totalSamples / sampleRate;
   }
 
   /// Converts double seconds to Duration
@@ -255,10 +332,20 @@ class Apev2Parser extends TagParser {
   static String? checkImageFormat(Uint8List bytes) {
     if (bytes.length < 8) return null;
     if (bytes[0] == 0x42 && bytes[1] == 0x4D) return 'image/bmp';
-    if (bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) return 'image/jpeg';
-    if (bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x38) return 'image/gif';
-    if (bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) return 'image/png';
-    if (bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46) return 'image/webp';
+    if (bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF)
+      return 'image/jpeg';
+    if (bytes[0] == 0x47 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46 &&
+        bytes[3] == 0x38) return 'image/gif';
+    if (bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4E &&
+        bytes[3] == 0x47) return 'image/png';
+    if (bytes[0] == 0x52 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46 &&
+        bytes[3] == 0x46) return 'image/webp';
     return 'image/jpeg';
   }
 }

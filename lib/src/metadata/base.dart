@@ -298,7 +298,8 @@ extension CommonMetadataSetters on ParserTag {
       case Mp3Metadata m:
         if (cdNumber != null && discTotal == null)
           m.partOfSet = "$cdNumber";
-        else if (cdNumber != null && discTotal != null) m.partOfSet = "$cdNumber/$discTotal";
+        else if (cdNumber != null && discTotal != null)
+          m.partOfSet = "$cdNumber/$discTotal";
         break;
       case Mp4Metadata m:
         m.discNumber = cdNumber;

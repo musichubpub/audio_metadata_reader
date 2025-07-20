@@ -56,7 +56,9 @@ void main() {
       metadata.setYear(DateTime(2014));
       metadata.setLyrics("I'm singing");
       metadata.setGenres(["Rock", "Metal", "Salsa"]);
-      metadata.setPictures([Picture(Uint8List.fromList([]), "image/png", PictureType.coverFront)]);
+      metadata.setPictures([
+        Picture(Uint8List.fromList([]), "image/png", PictureType.coverFront)
+      ]);
     },
   );
 }
