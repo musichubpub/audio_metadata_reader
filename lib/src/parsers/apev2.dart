@@ -5,6 +5,9 @@ import 'dart:typed_data';
 import 'package:audio_metadata_reader/src/metadata/base.dart';
 import 'package:audio_metadata_reader/src/parsers/tag_parser.dart';
 
+//  References:   1) https://www.monkeysaudio.com/developers.html
+//                2) https://wiki.hydrogenaudio.org/index.php?title=APE_key
+//                3) https://wiki.hydrogenaudio.org/index.php?title=APEv2_specification
 class Apev2Parser extends TagParser {
   final ApeMetadata metadata = ApeMetadata();
   Apev2Parser({super.fetchImage = false});
@@ -47,7 +50,11 @@ class Apev2Parser extends TagParser {
     metadata.trackNumber = _parseTrack(tag['track']);
     metadata.trackTotal = _parseTotal(tag['track']);
     metadata.discNumber = _parseDisc(tag['discnumber']);
-    metadata.lyric = tag['unsyncedlyrics'];
+    if (tag['lyrics'] != null) {
+      metadata.lyric = tag['lyrics'];
+    } else {
+      metadata.lyric = tag['unsyncedlyrics'];
+    }
     metadata.languages = tag['language'];
     metadata.pictures = [];
 

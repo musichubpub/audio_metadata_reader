@@ -204,14 +204,6 @@ AudioMetadata readMetadata(File track, {bool getImage = false}) {
         trackTotal: apeMetadata.trackTotal,
         year: apeMetadata.year,
         discNumber: apeMetadata.discNumber,
-
-        ///
-        // languages: apeMetadata.languages,
-        // size: apeMetadata.size,
-        // comment: apeMetadata.comment,
-        // lastModified: apeMetadata.lastModified,
-        // version: apeMetadata.version,
-        // fileMD5: apeMetadata.fileMD5,
       );
 
       newMetadata.pictures = apeMetadata.pictures;

@@ -12,10 +12,10 @@ void main() {
     expect(result.album, equals("Album"));
     expect(result.artist, equals("Artist"));
     expect(result.discNumber, equals(1));
-    // expect(result.sampleRate, equals(48000));
+    expect(result.sampleRate, equals(48000));
     expect(result.title, equals("Title"));
     expect(result.trackNumber, equals(12));
-    // expect(result.duration, equals(Duration(seconds: 0)));
+    expect(result.duration, equals(Duration(seconds: 5)));
     expect(result.totalDisc, equals(0));
     expect(result.lyrics, equals("this is lyric"));
     expect(result.trackTotal, equals(0));
